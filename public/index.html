@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#131516">
+  <meta name="description" content="浏览相机照片，挑选并保存原图到 NAS 文件夹。">
+  <title>照片筛选 · Photo Selector</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="照片筛选首页"><span class="brand-mark" aria-hidden="true">▣</span><strong>照片筛选</strong><span class="brand-en">PHOTO SELECTOR</span></a>
+    <span class="local-label"><span class="status-dot"></span>本机工作区</span>
+  </header>
+
+  <main class="workspace">
+    <section class="photo-workspace" aria-label="照片浏览">
+      <div class="source-toolbar">
+        <div class="source-description"><span class="eyebrow">照片来源</span><div class="source-line"><strong id="sourceName">NIKON Z5_2</strong><span id="photoCount" class="count-pill">读取中</span></div><p id="sourcePath" class="path-text"></p></div>
+        <div class="toolbar-actions"><button id="rescan" class="icon-button" title="重新扫描照片" aria-label="重新扫描照片">↻</button><button id="changeSource" class="button button-secondary">选择来源 <span aria-hidden="true">↗</span></button></div>
+      </div>
+
+      <div class="viewer" id="viewer" aria-busy="true">
+        <div class="viewer-top"><span id="position" class="position">— / —</span><span id="savedBadge" class="saved-badge" hidden>✓ 已保存到此目录</span></div>
+        <img id="photo" alt="" hidden>
+        <div id="viewerState" class="viewer-state"><span class="large-icon" aria-hidden="true">▧</span><h1 id="stateTitle">正在读取照片</h1><p id="stateDescription">首次扫描需要一点时间</p><button id="stateAction" class="button button-secondary" hidden>重新选择来源</button></div>
+        <div id="imageLoading" class="image-loading" hidden><span class="spinner"></span>正在加载预览</div>
+        <button id="retryPreview" class="button button-secondary retry-preview" hidden>重试预览</button>
+        <div class="viewer-bottom"><span id="photoFormat"></span><button id="fullscreen" class="text-button" aria-label="全屏查看照片">⤢ <span>全屏</span></button></div>
+      </div>
+
+      <div class="photo-controls">
+        <div class="file-info"><strong id="fileName">等待照片</strong><span id="fileMeta">JPG 原图</span></div>
+        <div class="navigation-buttons"><button id="previous" class="button button-secondary" disabled><span aria-hidden="true">↑</span> 上一张</button><button id="next" class="button button-secondary" disabled>下一张 <span aria-hidden="true">↓</span></button></div>
+      </div>
+      <nav id="filmstrip" class="filmstrip" aria-label="附近照片缩略图"></nav>
+      <div class="workspace-footer"><span>浏览 <kbd>↑</kbd> <kbd>↓</kbd><span class="shortcut-divider">·</span>保存 <kbd>S</kbd></span><span id="scanNote">保留相机卡原图</span></div>
+    </section>
+
+    <aside class="destination-panel" aria-label="保存位置">
+      <div class="panel-heading"><span class="eyebrow">原图归档</span><h2>保存到文件夹</h2></div>
+      <div class="nas-card"><span class="nas-icon" aria-hidden="true">▤</span><div><strong id="destinationLabel">NAS · 生活 / 2026</strong><span id="destinationServer">192.168.1.66</span></div><span id="nasStatus" class="status-dot"></span></div>
+      <div class="folder-heading"><strong>目标文件夹</strong><button id="changeTarget" class="text-button">更换</button></div>
+      <div class="selected-folder"><span class="folder-glyph" aria-hidden="true">▱</span><div><strong id="targetName">2026</strong><span id="targetPath" class="path-text"></span></div></div>
+      <div class="folder-actions"><button id="parentFolder" class="text-button">↑ 上一级</button><button id="newFolder" class="text-button">＋ 新建文件夹</button></div>
+      <div id="folders" class="folder-list" aria-label="目标子文件夹"></div>
+      <p id="folderError" class="inline-error" role="alert" hidden></p>
+      <button id="retryTarget" class="button button-secondary" hidden>重试连接</button>
+      <div class="save-area"><button id="save" class="button button-save" disabled><span aria-hidden="true">↓</span><span id="saveLabel">保存原图</span><kbd>S</kbd></button><p class="save-hint">复制完整原图到所选文件夹</p><p id="saveFeedback" class="save-feedback" role="status" aria-live="polite"></p></div>
+      <div class="session-stat"><span>本次已保存</span><strong><span id="savedCount">0</span><small> 张</small></strong></div>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <dialog id="folderDialog" class="folder-dialog">
+    <div class="dialog-header"><div><span class="eyebrow">文件夹</span><h2 id="dialogTitle">选择照片来源</h2></div><button id="closeDialog" class="icon-button" aria-label="关闭">×</button></div>
+    <form id="pathForm" class="path-form"><label for="folderPathInput">完整路径</label><div><input id="folderPathInput" type="text" spellcheck="false" autocomplete="off" placeholder="/Volumes/…"><button class="button button-secondary" type="submit">打开</button></div></form>
+    <div id="locations" class="location-shortcuts"></div>
+    <div class="browse-heading"><button id="browseParent" class="text-button">↑ 上一级</button><span id="browsePath" class="path-text"></span></div>
+    <div id="browseFolders" class="browse-folders"></div>
+    <p id="browseError" class="inline-error" role="alert" hidden></p>
+    <div class="dialog-footer"><button id="nativePicker" class="text-button">系统目录选择器 ↗</button><button id="selectFolder" class="button button-save">使用此文件夹</button></div>
+  </dialog>
+
+  <dialog id="newFolderDialog" class="new-folder-dialog">
+    <form id="newFolderForm"><div class="dialog-header"><h2>新建文件夹</h2><button id="closeNewFolder" class="icon-button" type="button" aria-label="关闭">×</button></div><p id="newFolderParent" class="path-text"></p><label for="folderNameInput">文件夹名称</label><input id="folderNameInput" type="text" required maxlength="200" placeholder="例如：202610 · 国庆旅行" autocomplete="off"><p id="createError" class="inline-error" role="alert" hidden></p><div class="dialog-footer"><button id="cancelNewFolder" class="button button-secondary" type="button">取消</button><button id="createFolder" class="button button-save" type="submit">创建并选择</button></div></form>
+  </dialog>
+</body>
+</html>
