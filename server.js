@@ -119,8 +119,9 @@ export async function createApp({ dataDir = process.env.PHOTO_SELECTOR_DATA_DIR 
       }
       const photoMatch = /^\/api\/photo\/([a-f0-9]{32})$/.exec(url.pathname);
       if (photoMatch && request.method === 'GET') {
-        const image = await library.preview(photoMatch[1], url.searchParams.get('size'));
-        response.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': image.length, 'Cache-Control': 'private, max-age=3600' });
+        const size = url.searchParams.get('size');
+        const image = await library.preview(photoMatch[1], size);
+        response.writeHead(200, { 'Content-Type': size === 'clipboard' ? 'image/png' : 'image/jpeg', 'Content-Length': image.length, 'Cache-Control': 'private, max-age=3600' });
         return response.end(image);
       }
       const file = staticFiles.get(url.pathname);

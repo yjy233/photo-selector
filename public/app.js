@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const state = { config: null, photos: [], index: 0, scanning: false, scanVersion: 0, sourcePath: '', targetPath: '', destinationRoot: '', destinationAvailable: false, targetLoading: false, targetChanging: false, saving: false, saved: new Map(), savedCount: 0, folderVersion: 0, targetVersion: 0, imageVersion: 0, imageController: null, imageURL: null, browseVersion: 0, browsePath: '', browseKind: 'source', selecting: false, toastTimer: null };
+const state = { config: null, photos: [], index: 0, scanning: false, scanVersion: 0, sourcePath: '', targetPath: '', destinationRoot: '', destinationAvailable: false, targetLoading: false, targetChanging: false, saving: false, copying: false, saved: new Map(), savedCount: 0, folderVersion: 0, targetVersion: 0, imageVersion: 0, imageController: null, imageURL: null, browseVersion: 0, browsePath: '', browseKind: 'source', selecting: false, toastTimer: null };
 
 async function api(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json', 'X-Photo-Token': state.config?.csrfToken ?? '' } : {}), ...options.headers } });
@@ -27,6 +27,9 @@ function updateControls() {
   const saved = photo && state.saved.has(savedKey(photo));
   $('previous').disabled = state.scanning || !photo || state.index === 0;
   $('next').disabled = state.scanning || !photo || state.index >= state.photos.length - 1;
+  $('copy').disabled = state.scanning || !photo || state.copying;
+  $('copyLabel').textContent = state.copying ? '复制中…' : '复制照片';
+  $('copy').setAttribute('aria-busy', String(state.copying));
   $('save').disabled = state.scanning || !photo || !state.destinationAvailable || state.targetLoading || state.targetChanging || state.saving;
   $('newFolder').disabled = !state.destinationAvailable || state.targetLoading || state.targetChanging;
   $('retryTarget').disabled = state.targetLoading || state.targetChanging;
@@ -174,6 +177,29 @@ async function chooseTarget(target, root) {
   finally { if (version === state.targetVersion) { state.targetChanging = false; updateControls(); } }
 }
 
+async function copyPhoto() {
+  const photo = state.photos[state.index];
+  if (!photo || state.scanning || state.copying) return;
+  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined' || (ClipboardItem.supports && !ClipboardItem.supports('image/png'))) {
+    toast('当前浏览器不支持复制照片，请使用新版 Chrome、Edge 或 Safari。', true);
+    return;
+  }
+  state.copying = true; updateControls();
+  try {
+    const image = fetch(imagePath(photo, 'clipboard')).then(async response => {
+      if (!response.ok) { const data = await response.json(); throw new Error(data.error || '照片读取失败，请重试。'); }
+      return response.blob();
+    });
+    // The write must start during the click, before fetching finishes (Safari).
+    // Handle fetch failures even if clipboard permission is denied immediately.
+    image.catch(() => {});
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': image })]);
+    toast(`${photo.name} 已复制到剪贴板`);
+  } catch (error) {
+    toast(error.name === 'NotAllowedError' ? '无法写入剪贴板，请允许剪贴板访问后重试。' : `复制 ${photo.name} 失败：${error.message || '请重试。'}`, true);
+  } finally { state.copying = false; updateControls(); }
+}
+
 async function savePhoto() {
   const photo = state.photos[state.index];
   if (!photo || state.scanning || state.saving || state.targetChanging || state.targetLoading || !state.destinationAvailable) return;
@@ -243,6 +269,7 @@ function openNewFolder() {
 
 $('previous').addEventListener('click', () => navigate(-1));
 $('next').addEventListener('click', () => navigate(1));
+$('copy').addEventListener('click', copyPhoto);
 $('save').addEventListener('click', savePhoto);
 $('rescan').addEventListener('click', () => scan(state.sourcePath || state.config.sourcePath));
 $('changeSource').addEventListener('click', () => openBrowser('source'));

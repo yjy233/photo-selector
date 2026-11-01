@@ -108,6 +108,34 @@ test('预览遵循方向且缩小，原文件不变；坏照片不影响保存�
   assert.equal(await fs.readFile(saved.path, 'utf8'), 'not an image');
 });
 
+test('剪贴板图片为完整尺寸的 PNG，遵循 EXIF 方向且与预览缓存独立', async t => {
+  const { source } = await fixture(t);
+  const original = await sharp({ create: { width: 2600, height: 1300, channels: 3, background: '#84ae48' } }).withMetadata({ orientation: 6 }).jpeg().toBuffer();
+  const file = path.join(source, 'portrait.JPG');
+  await fs.writeFile(file, original);
+  const library = new PhotoLibrary();
+  const { photos } = await library.scan(source);
+  const photo = photos.find(p => p.name === 'portrait.JPG');
+  const preview = await sharp(await library.preview(photo.id, 'preview')).metadata();
+  assert.equal(preview.format, 'jpeg'); assert.equal(preview.height, 2200);
+  const [first, second] = await Promise.all([library.preview(photo.id, 'clipboard'), library.preview(photo.id, 'clipboard')]);
+  const copied = await sharp(first).metadata();
+  assert.equal(copied.format, 'png'); assert.equal(copied.width, 1300); assert.equal(copied.height, 2600);
+  assert.equal(first, second);
+  assert.deepEqual(await fs.readFile(file), original);
+});
+
+test('剪贴板 PNG 保留透明度和像素内容', async t => {
+  const { source } = await fixture(t);
+  const original = await sharp({ create: { width: 32, height: 48, channels: 4, background: { r: 50, g: 100, b: 150, alpha: 0.5 } } }).png().toBuffer();
+  await fs.writeFile(path.join(source, 'transparent.png'), original);
+  const library = new PhotoLibrary();
+  const { photos } = await library.scan(source);
+  const copied = await library.preview(photos.find(p => p.name === 'transparent.png').id, 'clipboard');
+  assert.equal((await sharp(copied).metadata()).hasAlpha, true);
+  assert.deepEqual(await sharp(copied).raw().toBuffer(), await sharp(original).raw().toBuffer());
+});
+
 test('HTTP 完整流程与跨站防护；目录配置可恢复', async t => {
   const { root, source, target, image } = await fixture(t);
   const dataDir = path.join(root, 'settings');
@@ -132,6 +160,11 @@ test('HTTP 完整流程与跨站防护；目录配置可恢复', async t => {
   assert.equal((await request('/api/settings', { targetPath: folder.path }, token)).status, 200);
   const previewResponse = await request(`/api/photo/${photos.photos[0].id}?size=thumb`);
   assert.equal(previewResponse.status, 200); assert.equal(previewResponse.headers.get('Content-Type'), 'image/jpeg');
+  const clipboardResponse = await request(`/api/photo/${photos.photos[0].id}?size=clipboard`);
+  assert.equal(clipboardResponse.status, 200); assert.equal(clipboardResponse.headers.get('Content-Type'), 'image/png');
+  const clipboardImage = await sharp(Buffer.from(await clipboardResponse.arrayBuffer())).metadata();
+  assert.equal(clipboardImage.format, 'png'); assert.equal(clipboardImage.width, 48); assert.equal(clipboardImage.height, 32);
+  assert.equal((await request(`/api/photo/${'0'.repeat(32)}?size=clipboard`)).status, 404);
   const saved = await (await request('/api/save', { id: photos.photos[0].id }, token)).json();
   assert.deepEqual(await fs.readFile(saved.path), image);
   assert.equal((await request('/api/save', { id: 'invalid' }, token)).status, 404);
